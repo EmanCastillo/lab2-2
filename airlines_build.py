@@ -5,37 +5,42 @@ BASE_DIR = Path(__file__).resolve().parent
 OUT_DIR = BASE_DIR / "generated_sql"
 
 
-def sql_text(value):
+def clean(value):
     if value is None:
-        return "NULL"
+        return None
     value = value.strip()
     if value == "" or value.lower() == "null":
-        return "NULL"
-    if len(value) >= 2 and value[0] == "'" and value[-1] == "'":
-        value = value[1:-1]
-    value = value.replace("'", "''")
-    return f"'{value}'"
-
-
-def sql_int(value):
-    if value is None:
-        return "NULL"
-    value = value.strip()
-    if value == "" or value.lower() == "null":
-        return "NULL"
+        return None
     if len(value) >= 2 and value[0] == "'" and value[-1] == "'":
         value = value[1:-1]
     return value
 
 
-def write_table(csv_path, out_path, table_name, columns, formatters):
+def sql_text(value):
+    value = clean(value)
+    if value is None:
+        return "NULL"
+    value = value.replace("'", "''")
+    return f"'{value}'"
+
+
+def sql_int(value):
+    value = clean(value)
+    if value is None:
+        return "NULL"
+    return value
+
+
+def write_table_by_index(csv_path, out_path, table_name, columns, formatters):
     with csv_path.open(newline="", encoding="utf-8-sig") as handle, \
          out_path.open("w", encoding="utf-8") as out:
-        reader = csv.DictReader(handle, skipinitialspace=True)
+        reader = csv.reader(handle)
+        next(reader, None)  # skip header
         for row in reader:
             values = []
-            for column, formatter in zip(columns, formatters):
-                values.append(formatter(row.get(column)))
+            for i, formatter in enumerate(formatters):
+                cell = row[i] if i < len(row) else None
+                values.append(formatter(cell))
             sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({', '.join(values)});"
             out.write(sql + "\n")
 
@@ -48,7 +53,7 @@ def main():
     flights_file = OUT_DIR / "FLIGHTS-build.sql"
     combined_file = OUT_DIR / "AIRLINES-dataset-build.sql"
 
-    write_table(
+    write_table_by_index(
         BASE_DIR / "airlines.csv",
         airlines_file,
         "AIRLINES",
@@ -56,7 +61,7 @@ def main():
         [sql_int, sql_text, sql_text, sql_text],
     )
 
-    write_table(
+    write_table_by_index(
         BASE_DIR / "airports100.csv",
         airport_file,
         "AIRPORT",
@@ -64,7 +69,7 @@ def main():
         [sql_text, sql_text, sql_text, sql_text, sql_text],
     )
 
-    write_table(
+    write_table_by_index(
         BASE_DIR / "flights.csv",
         flights_file,
         "FLIGHTS",
